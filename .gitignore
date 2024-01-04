@@ -1,3 +1,6 @@
 # Directories start with dot
 .*/
 __pycache__/
+
+# Release zip
+iup.zip
