@@ -8,13 +8,27 @@ Request UPDATE_URL, VERSION, DOWNLOAD_URL, CHANGE_LOG from server.
 
 ## 结构 Structure
 
-## iup_support.py
+## iup.py
 
-- 用于支持`--iup-version`，`--iup-update`命令，提供版本信息，更新地址支持。
+支持`--iup-version`，`--iup-update-url`，`--iup-upgrade`命令
 
-## iup_upgrade.py
+- `--iup-version`：获得iup可读取的版本信息。需要参考【版本号格式】进行定义。
+- `--iup-update-url`：获得iup可读取的更新服务器信息。可以参考【lastest.json】进行定义。
+- `--iup-upgrade`：执行更新。
 
-用于升级脚本。
+## lastest.json
+
+需要放在服务器上的版本信息文件。  
+iup的测试sample是利用Gitee的raw路径实现python读取。  
+例如sample.py中，
+
+```python
+IUP_UPDATE_URL = 'https://gitee.com/izmj/iup/raw/master/lastest.json'
+```
+
+## sample.py
+
+使用范例
 
 ## 版本号格式 VERSION Format
 
@@ -31,13 +45,3 @@ The app should return the version information when accepting the `--iup-version`
 - Major version number: Large-scale feature changes, which may not be compatible with previous versions.
 - Minor version number: Common feature changes should be compatible with previous versions as much as possible.
 - Build number: Fixed bugs, no functional changes.
-
-## 发布流程 Release Workflow
-
-1. 修改代码，更新`--iup-version`命令返回的版本信息。  
-2. 应用打包zip。
-3. 更新https://izmj.net/release/iup_upgrade.json内容。
-----
-1. Modify the code and update the version information returned by the `--iup-version` command.  
-2. Make zip package.
-3. Update the content of the https://izmj.net/release/iup_upgrade.json.

@@ -1,99 +1,135 @@
 #!/usr/bin/env python3
 
-import os
 import sys
-import configparser
 import requests
 import json
+import os
+import shutil
+import urllib
+import zipfile
 
-# 1. 读取.izmj/iup.ini文件。
-#   1.1 读取iup的更新服务器地址。如果没提供，默认https://izmj.net/release/iup_upgrade.json
-#   1.2 读取需要被服务的程序的更新地址。
-# 2. 如果iup.ini文件不存在，则创建该文件。
-#   2.1 保存默认的iup服务器地址https://izmj.net/release/iup_upgrade.json。
-# 3. 如果没有读取到被服务的程序的更新地址。要求用户输入一个。
-# 4. 通过--version参数，读取被服务的程序的版本号。
+def upgrade(iup_current_version, iup_update_url):
 
-# 默认配置文件位置，可以通过--conf=xxxxx外部设定
-IUP_CONF_PATH_DEFAULT = "./.izmj/iup.ini"
+    iup_download_url = check_upgrade(iup_current_version, iup_update_url)
 
-# 默认更新地址，可以通过修改conf获得
-IUP_UPDATE_URL_DEFAULT = "https://izmj.net/release/iup_upgrade.json"
+    # 下载更新
+    print(f'正在从{iup_download_url}下载更新...')
 
-# 当前程序版本号
-IUP_VERSION_MAJOR = "0"
-IUP_VERSION_MINOR = "5"
-IUP_VERSION_BUILD = "0"
+    # 删除目录
+    if os.path.exists('.iup/'):
+        if os.path.isdir('.iup/'):
+            shutil.rmtree('.iup/')
 
-iup_conf_path = IUP_CONF_PATH_DEFAULT
+    # 创建目录
+    os.mkdir('.iup/')
 
-# 遍历入参
-for arg in sys.argv:
-    if arg.startswith('--conf='):
-        # 读取配置文件
-        iup_conf_path = arg[7:]
-    elif arg.startswith('--version'):
-        # 输出版本号
-        print(f'{IUP_VERSION_MAJOR}.{IUP_VERSION_MINOR}.{IUP_VERSION_BUILD}')
-        sys.exit(0)
+    file_name = iup_download_url.split('/')[-1]
 
-
-iup_update_url = ''
-if os.path.exists(iup_conf_path):
-    # 读取ini文件
-    config = configparser.ConfigParser()
-    config.read(iup_conf_path)
-
-    # 读取配置
-    iup_update_url = config.get('iup', 'update_url')
-
-else:
-    # 创建配置文件
-    if not os.path.exists(os.path.dirname(iup_conf_path)):
-        os.makedirs(os.path.dirname(iup_conf_path))
-    
-    config = configparser.ConfigParser()
-    config.add_section('iup')
-    config.set('iup', 'update_url', IUP_UPDATE_URL_DEFAULT)
-    config.write(open(iup_conf_path, 'w'))
-
-# 如果读取配置失败，使用默认的更新路径
-if '' == iup_update_url:
-    print(f'配置文件[{iup_conf_path}]中未读取到iup更新服务器地址，使用默认路径：' + IUP_UPDATE_URL_DEFAULT)
-    iup_update_url = IUP_UPDATE_URL_DEFAULT
-else:
-    print(f'配置文件[{iup_conf_path}]中读取到iup更新服务器地址：' + iup_update_url)
-
-# 从iup_conf_path上读取最新的版本号，超时时间为5秒
-try:
-    r = requests.get(iup_update_url, timeout=15)
-    if 200 != r.status_code:
-        print(f'无法从{iup_update_url}获取最新版本号！请邮件联系作者contact@izmj.net')
+    try:
+        urllib.request.urlretrieve(iup_download_url, f'.iup/{file_name}')
+    except:
+        print(f'无法从{iup_download_url}下载更新！')
         sys.exit(1)
-except requests.exceptions.Timeout:
-    print('网络超时，请稍后重试。')
-    sys.exit(1)
 
-# 解析json
-iup_update_info = json.loads(r.text)
-iup_update_url_version = iup_update_info['version']
-iup_download_url = iup_update_info['download_url']
-iup_update_url = iup_update_info['update_url']
-iup_changelog = iup_update_info['changelog']
+    # 解压更新
+    print(f'正在解压...')
+    zip_file_path = f'.iup/{file_name}'
+    extract_path = '.iup/'
 
-# 解析iup_update_url_version，拆分MAIN.SUB.BUILD
-iup_update_url_version_split = iup_update_url_version.split('.')
-iup_update_url_version_main = iup_update_url_version_split[0]
-iup_update_url_version_sub = iup_update_url_version_split[1]
-iup_update_url_version_build = iup_update_url_version_split[2]
+    try:
+        with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+            zip_ref.extractall(extract_path)
+    except:
+        print(f'无法解压更新！')
+        sys.exit(1)
 
-# 如果版本号比当前版本号大，则提示更新
-if (int(iup_update_url_version_main) <= int(IUP_VERSION_MAJOR)) and (int(iup_update_url_version_sub) <= int(IUP_VERSION_MINOR)) and (int(iup_update_url_version_build) <= int(IUP_VERSION_BUILD)):
-    print('当前版本已经是最新版本，无需更新。')
-    exit(0)
-else:
-    print('----------------------------------')
-    print(f'发现新版本{iup_update_url_version}，请更新！')
-    print(f'更新地址：{iup_download_url}')
-    print(f'更新日志：{iup_changelog}')
-    print('----------------------------------')
+    # 删除压缩包
+    os.remove(zip_file_path)
+
+    # 将.iup/目录下的文件复制到当前目录
+    print(f'正在执行更新...')
+    source_dir = '.iup/'
+    destination_dir = './'
+
+    try:
+        shutil.copytree(source_dir, destination_dir, dirs_exist_ok=True)
+    except:
+        # 提示复制失败的文件信息
+        print(f'更新失败！')
+        sys.exit(1)
+
+    print('更新成功')
+    sys.exit(0)
+
+def init(iup_current_version, iup_update_url):
+
+    iup_update_url = iup_update_url
+
+    # 如果没有定义VERSION，则抛异常
+    if '--iup-version' in sys.argv:
+        print(iup_current_version)
+        sys.exit(0)
+    if '--iup-update-url' in sys.argv:
+        print(iup_update_url)
+        sys.exit(0)
+    if '--iup-upgrade' in sys.argv:
+        upgrade(iup_current_version, iup_update_url)
+
+def check_upgrade(iup_current_version, iup_update_url):
+    # 从conf_path上读取最新的版本号，超时时间为5秒
+    try:
+        r = requests.get(iup_update_url, timeout=15)
+        if 200 != r.status_code:
+            print(f'无法从{iup_update_url}获取最新版本号！请邮件联系作者contact@izmj.net')
+            sys.exit(1)
+    except requests.exceptions.Timeout:
+        print('网络超时，请稍后重试。')
+        sys.exit(1)
+
+    # 解析json
+    update_info = json.loads(r.text)
+
+    try:
+        iup_remote_version = update_info['version']
+    except:
+        print(f'无法从{iup_update_url}获取version！')
+        sys.exit(1)
+
+    try:
+        iup_download_url = update_info['download_url']
+    except:
+        print(f'无法从{iup_update_url}获取download_url！')
+        sys.exit(1)
+
+    try:
+        changelog = update_info['changelog']
+    except:
+        changelog = '无'
+
+    # 解析update_url_version，拆分MAIN.SUB.BUILD
+    iup_remote_version_split = iup_remote_version.split('.')
+    iup_remote_version_main = iup_remote_version_split[0]
+    iup_remote_version_sub = iup_remote_version_split[1]
+    iup_remote_version_build = iup_remote_version_split[2]
+
+    current_version_split = iup_current_version.split('.')
+    current_version_main = current_version_split[0]
+    current_version_sub = current_version_split[1]
+    current_version_build = current_version_split[2]
+
+    # 如果版本号比当前版本号大，则提示更新
+    if (int(iup_remote_version_main) <= int(current_version_main)) \
+        and (int(iup_remote_version_sub) <= int(current_version_sub)) \
+            and (int(iup_remote_version_build) <= int(current_version_build)):
+        print('----------------------------------')
+        print(f'- 当前版本[{iup_current_version}]已经是最新版本')
+        print('----------------------------------')
+        exit(0)
+    else:
+        print('----------------------------------')
+        print(f'- 当前版本：[{iup_current_version}]')
+        print(f'- 发现新版本：[{iup_remote_version}]\n')
+        print(f'- 更新日志：\n----------------------------------\n{changelog}\n----------------------------------')
+        print(f'- 更新命令：python3 {sys.argv[0]} --iup-upgrade')
+        print('----------------------------------')
+        return iup_download_url

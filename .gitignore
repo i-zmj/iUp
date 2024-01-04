@@ -1,0 +1,3 @@
+# Directories start with dot
+.*/
+__pycache__/
